@@ -57,7 +57,8 @@ app.post("/api/chat", async (req, res) => {
     res.status(500).json({
       action: "none",
       value: "",
-      response: "ada error di otak gue, coba lagi nanti."
+      response: "ada error di otak gue, coba lagi nanti.",
+      mood: "confused"
     });
   }
 });

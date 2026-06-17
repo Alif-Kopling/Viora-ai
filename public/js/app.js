@@ -15,6 +15,14 @@ let conversationHistory = [];
 let isProcessing = false;
 let msgCount = 0;
 
+function showMood(mood) {
+  if (mood === 'happy') {
+    viz.clearMood();
+    return;
+  }
+  viz.showMood(mood);
+}
+
 function showTimerNotification(text) {
   const el = document.getElementById('timerNotification');
   document.getElementById('timerText').textContent = text;
@@ -38,6 +46,7 @@ voice.onStatus = (status) => {
     viz.stop();
     vizText.style.opacity = '1';
     vioraTag.textContent = 'nemenin kamu';
+    if (status === 'idle') showMood('happy');
   } else if (status === 'blocked') {
     scSpeaker.classList.add('blocked');
     vizText.textContent = 'Klik halaman dulu buat aktifin suara';
@@ -63,6 +72,7 @@ eventSource.addEventListener('timer_done', (e) => {
   const data = JSON.parse(e.data);
   showTimerNotification(`Waktu habis! Timer ${data.seconds} detik selesai.`);
   chat.addSystemMessage(`Timer ${data.seconds} detik selesai!`);
+  showMood('excited');
 });
 
 eventSource.addEventListener('connected', () => {
@@ -94,6 +104,7 @@ async function sendMessage(message) {
 
     chat.hideTyping();
     chat.typeResponse(data.response || '...');
+    showMood(data.mood || 'happy');
 
     voice.speak(data.response || '');
 
@@ -112,6 +123,7 @@ async function sendMessage(message) {
   } catch (error) {
     chat.hideTyping();
     chat.addErrorMessage('Gagal konek ke server. Coba lagi.');
+    showMood('sad');
   }
 
   isProcessing = false;
@@ -153,4 +165,5 @@ micBtn.addEventListener('click', () => {
   chat.addSystemMessage('Mikrofon aktif, silakan bicara...');
 });
 
+showMood('happy');
 messageInput.focus();
