@@ -6,7 +6,7 @@
   </p>
   <p align="center">
     <img src="https://img.shields.io/badge/Node.js-18%2B-339933?logo=node.js&logoColor=white">
-    <img src="https://img.shields.io/badge/Gemini-2.0-8E75B2?logo=googlegemini&logoColor=white">
+    <img src="https://img.shields.io/badge/Gemini-3.01-8E75B2?logo=googlegemini&logoColor=white">
     <img src="https://img.shields.io/badge/TTS-Edge-0078D7?logo=windows&logoColor=white">
     <img src="https://img.shields.io/badge/license-MIT-blue">
   </p>
