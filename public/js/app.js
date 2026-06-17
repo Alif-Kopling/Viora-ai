@@ -79,6 +79,26 @@ eventSource.addEventListener('connected', () => {
   console.log('SSE connected');
 });
 
+eventSource.addEventListener('greeting', (e) => {
+  const data = JSON.parse(e.data);
+  chat.showTyping();
+  setTimeout(() => {
+    chat.hideTyping();
+    chat.typeResponse(data.response || '');
+    showMood(data.mood || 'happy');
+    voice.speak(data.response || '');
+    vioraTag.textContent = 'nemenin kamu';
+  }, 1500);
+});
+
+eventSource.addEventListener('idle_message', (e) => {
+  const data = JSON.parse(e.data);
+  chat.addAssistantMessage(data.response || '');
+  showMood(data.mood || 'sad');
+  voice.speak(data.response || '');
+  vioraTag.textContent = 'kangen kamu...';
+});
+
 async function sendMessage(message) {
   if (isProcessing || !message.trim()) return;
 

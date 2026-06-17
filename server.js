@@ -3,9 +3,9 @@ import express from "express";
 import cors from "cors";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
-import { initGemini, chatWithViora } from "./brain/gemini.js";
+import { initGemini, chatWithViora, generateIdleMessage, generateGreeting, loadMemory } from "./brain/gemini.js";
 import { executeAction } from "./executor/index.js";
-import { addSSEClient } from "./executor/timer.js";
+import { addSSEClient, broadcastSSE } from "./executor/timer.js";
 import { generateAudio, listVoices } from "./tts/index.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -22,7 +22,29 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(join(__dirname, "public")));
 
-app.get("/events", (req, res) => {
+let lastActivity = Date.now();
+const IDLE_TIMEOUT = 5 * 60 * 1000;
+
+function resetIdleTimer() {
+  lastActivity = Date.now();
+}
+
+async function checkIdle() {
+  if (Date.now() - lastActivity < IDLE_TIMEOUT) return;
+
+  lastActivity = Date.now();
+  console.log("VIORA: user idle 5 menit, kirim pesan kangen...");
+
+  try {
+    const memory = await loadMemory();
+    const msg = await generateIdleMessage(memory);
+    broadcastSSE("idle_message", msg);
+  } catch (error) {
+    console.error("Idle check error:", error.message);
+  }
+}
+
+app.get("/events", async (req, res) => {
   res.writeHead(200, {
     "Content-Type": "text/event-stream",
     "Cache-Control": "no-cache",
@@ -31,6 +53,22 @@ app.get("/events", (req, res) => {
   });
   res.write("event: connected\ndata: {}\n\n");
   addSSEClient(res);
+
+  try {
+    const memory = await loadMemory();
+    const isNew = memory.firstMeeting;
+    const stale = memory.lastInteraction
+      ? Date.now() - new Date(memory.lastInteraction).getTime() > 30 * 60 * 1000
+      : true;
+
+    if (isNew || stale) {
+      console.log("VIORA: ngirim greeting ke user...");
+      const msg = await generateGreeting(memory);
+      res.write(`event: greeting\ndata: ${JSON.stringify(msg)}\n\n`);
+    }
+  } catch (error) {
+    console.error("Greeting error:", error.message);
+  }
 });
 
 app.post("/api/chat", async (req, res) => {
@@ -42,6 +80,7 @@ app.post("/api/chat", async (req, res) => {
     }
 
     const result = await chatWithViora(message, history);
+    resetIdleTimer();
 
     if (result.action && result.action !== "none") {
       try {
@@ -123,6 +162,9 @@ app.get("/api/voices", async (req, res) => {
 async function start() {
   await initGemini(API_KEY);
   console.log("🧠 VIORA AI - Brain initialized");
+
+  setInterval(checkIdle, 30 * 1000);
+  console.log("⏰ Idle checker aktif — tiap 30 detik");
 
   app.listen(PORT, () => {
     console.log(`🚀 VIORA AI running at http://localhost:${PORT}`);

@@ -9,7 +9,7 @@ export function addSSEClient(res) {
   });
 }
 
-function broadcastSSE(event, data) {
+export function broadcastSSE(event, data) {
   const message = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
   for (const client of sseClients) {
     client.write(message);

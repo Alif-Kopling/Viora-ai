@@ -1,10 +1,10 @@
 {
-  "userName": "Kak",
+  "userName": "User",
   "firstMeeting": false,
   "preferences": {
     "language": "id",
-    "personality": "cheerful"
+    "sarcasmLevel": "high"
   },
   "conversationSummary": "",
-  "lastInteraction": "2026-06-17T06:56:43.980Z"
+  "lastInteraction": "2026-06-17T07:31:12.228Z"
 }

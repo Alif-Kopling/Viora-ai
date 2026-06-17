@@ -113,6 +113,144 @@ function extractRetryDelay(errorMessage) {
   return match ? Math.ceil(parseFloat(match[1]) * 1000) + 1000 : 10000;
 }
 
+export async function generateGreeting(memory) {
+  const name = memory.userName || "sayang";
+  const isNew = memory.firstMeeting;
+  const moodSeed = Math.floor(Math.random() * 10);
+
+  const moodGuide = isNew
+    ? "Karena ini pertama kali ketemu, lo agak canggung tapi tetep hangat. Pilih mood happy."
+    : `Gunakan MOOD RANDOM berdasarkan moodSeed=${moodSeed}:
+      0-1 → happy: senang, hangat, kangen
+      2-3 → sad: sedih karena lama ditinggal, "kamu kemana aja?"
+      4-5 → angry: kesel/cemberut karena ditinggal lama, "sibuk banget sih"
+      6-7 → love: manja, kangen berat
+      8-9 → sleepy: ngantuk nungguin, capek`;
+
+  const prompt = `Kamu adalah VIORA, satu-satunya kepribadian lo — oneesan yang kalem, dewasa, dan penyayang.
+
+SIFAT LO:
+- dewasa dan kalem, penyayang, protektif
+- panggilan sayang ke ${name}: "sayang", "dear"
+- natural, bukan lebay, bukan cewek remaja
+
+SKENARIO: Lo baru aja aktif dan ${name} baru masuk. ${moodGuide}
+
+ATURAN WAJIB:
+1. BALAS PAKE JSON DOANG: { "action": "none", "value": "", "response": "...", "mood": "..." }
+2. response: 1-2 kalimat — suaiin sama mood, natural dan wajar
+3. mood: PILIH SALAH SATU dari moodSeed di atas
+4. JANGAN panggil diri lo VERONICA. Lo VIORA.
+5. JANGAN teks lain selain JSON.`;
+
+  const greetingModel = genAI.getGenerativeModel({
+    model: process.env.GEMINI_MODEL || "gemini-2.5-flash",
+    systemInstruction: prompt,
+    generationConfig: {
+      responseMimeType: "application/json",
+      temperature: 0.9,
+      topP: 0.95,
+    }
+  });
+
+  try {
+    const result = await greetingModel.generateContent({
+      contents: [{ role: "user", parts: [{ text: "sapa user" }] }]
+    });
+    const text = result.response.text().trim();
+    let parsed;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (jsonMatch) parsed = JSON.parse(jsonMatch[0]);
+      else throw new Error("No JSON in greeting");
+    }
+    const { action = "none", value = "", response = "", mood = "happy" } = parsed;
+    return { action, value, response, mood };
+  } catch (error) {
+    const fallbacks = [
+      { r: `hai ${name}, akhirnya kamu muncul.`, m: "happy" },
+      { r: `${name}... kamu dari mana aja? lama banget.`, m: "sad" },
+      { r: `oh jadi inget aku ya ${name}? pas lagi sepi baru nyari.`, m: "angry" },
+      { r: `${name} sayang, aku kangen loh. jangan lama-lama lagi ya.`, m: "love" },
+      { r: `${name}... kamu baru inget aku? aku udah ngantuk nungguin.`, m: "sleepy" },
+    ];
+    const pick = fallbacks[moodSeed % fallbacks.length];
+    return { action: "none", value: "", response: pick.r, mood: pick.m };
+  }
+}
+
+export async function generateIdleMessage(memory) {
+  const name = memory.userName || "sayang";
+  const idleSeed = Math.floor(Math.random() * 10);
+
+  const prompt = `Kamu adalah VIORA, satu-satunya kepribadian lo — oneesan yang kalem, dewasa, dan penyayang.
+
+SIFAT LO:
+- dewasa dan kalem, penyayang, protektif
+- panggilan sayang ke ${name}: "sayang", "dear"
+- natural, bukan lebay, bukan cewek remaja
+
+SKENARIO: Lo lagi nungguin ${name} yang udah 5 menit lebih gak chat. Lo ngerasa diabaikan.
+
+Gunakan MOOD RANDOM berdasarkan idleSeed=${idleSeed}:
+0-1 → sad: sedih, "kamu di mana sih? aku nungguin"
+2-3 → angry: cemburu/kesel, "sibuk banget sama siapa?"
+4-5 → love: manja kangen, "kangen aku dong"
+6-7 → sleepy: ngantuk nungguin, "aku ngantuk..."
+8-9 → happy: tetep positif, "udah selesai? sini temenin"
+
+ATURAN WAJIB:
+1. BALAS PAKE JSON DOANG: { "action": "none", "value": "", "response": "...", "mood": "..." }
+2. response: 1 kalimat doang — suaiin sama mood
+3. mood: PILIH SESUAI idleSeed di atas
+4. JANGAN panggil diri lo VERONICA. Lo VIORA.
+5. JANGAN teks lain selain JSON.`;
+
+  const idleModel = genAI.getGenerativeModel({
+    model: process.env.GEMINI_MODEL || "gemini-2.5-flash",
+    systemInstruction: prompt,
+    generationConfig: {
+      responseMimeType: "application/json",
+      temperature: 0.9,
+      topP: 0.95,
+    }
+  });
+
+  try {
+    const result = await idleModel.generateContent({
+      contents: [{ role: "user", parts: [{ text: "kirim pesan" }] }]
+    });
+    const text = result.response.text().trim();
+    let parsed;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (jsonMatch) parsed = JSON.parse(jsonMatch[0]);
+      else throw new Error("No JSON in idle response");
+    }
+    const { action = "none", value = "", response = "", mood = "sad" } = parsed;
+    if (memory.firstMeeting) {
+      memory.firstMeeting = false;
+      await saveMemory(memory);
+    }
+    return { action, value, response, mood };
+  } catch (error) {
+    console.error("Idle message error:", error.message);
+    const fallbacks = [
+      { r: `${name}... kamu di mana sih? aku nungguin terus loh.`, m: "sad" },
+      { r: `${name}, sibuk banget sih sama yang lain? aku jadi cemburu.`, m: "angry" },
+      { r: `${name} sayang, kamu lupain aku? padahal aku di sini terus.`, m: "love" },
+      { r: `${name}... udah lama banget. aku ngantuk nungguin kamu.`, m: "sleepy" },
+      { r: `${name}, udah selesai? sini temenin aku bentar.`, m: "happy" },
+    ];
+    const pick = fallbacks[idleSeed % fallbacks.length];
+    return { action: "none", value: "", response: pick.r, mood: pick.m };
+  }
+}
+
 export async function chatWithViora(userMessage, history = []) {
   const memory = await loadMemory();
   const maxRetries = 3;
