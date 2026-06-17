@@ -5,34 +5,72 @@ class VoiceManager {
     this.onResult = null;
     this.onEnd = null;
     this.onStatus = null;
+    this.onSilence = null;
     this.language = "id-ID";
     this.playing = false;
     this.queue = [];
+    this.silenceTimer = null;
+    this.lastFinal = "";
+    this.paused = false;
 
     const SpeechRecognition =
       window.SpeechRecognition || window.webkitSpeechRecognition;
     if (SpeechRecognition) {
       this.recognition = new SpeechRecognition();
-      this.recognition.continuous = false;
-      this.recognition.interimResults = false;
+      this.recognition.continuous = true;
+      this.recognition.interimResults = true;
       this.recognition.lang = this.language;
 
       this.recognition.onresult = (event) => {
-        const transcript = event.results[0][0].transcript;
-        if (this.onResult) this.onResult(transcript);
+        let final = "";
+        let interim = "";
+
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const r = event.results[i];
+          if (r.isFinal) {
+            final += r[0].transcript;
+          } else {
+            interim += r[0].transcript;
+          }
+        }
+
+        if (final) {
+          if (this.onResult) this.onResult(final, false);
+          this.lastFinal = "";
+        }
+
+        if (interim) {
+          if (this.onResult) this.onResult(interim, true);
+        }
+
+        this._resetSilenceTimer();
       };
 
       this.recognition.onerror = (event) => {
         console.error("Speech recognition error:", event.error);
         this.isListening = false;
-        if (this.onEnd) this.onEnd();
+        if (event.error !== "aborted" && !this.paused) {
+          setTimeout(() => this.startListening(), 1000);
+        }
       };
 
       this.recognition.onend = () => {
         this.isListening = false;
-        if (this.onEnd) this.onEnd();
+        if (!this.paused) {
+          setTimeout(() => this.startListening(), 500);
+        }
       };
     }
+  }
+
+  _resetSilenceTimer() {
+    if (this.silenceTimer) clearTimeout(this.silenceTimer);
+    this.silenceTimer = setTimeout(() => {
+      if (this.lastFinal && this.onSilence) {
+        this.onSilence(this.lastFinal);
+        this.lastFinal = "";
+      }
+    }, 3000);
   }
 
   setStatus(s) {
@@ -44,13 +82,12 @@ class VoiceManager {
   }
 
   startListening() {
-    if (!this.recognition) return;
+    if (!this.recognition || this.isListening) return;
     try {
       this.recognition.start();
       this.isListening = true;
-    } catch (e) {
-      console.error("Voice start error:", e);
-    }
+      this.paused = false;
+    } catch (e) {}
   }
 
   stopListening() {
@@ -61,14 +98,24 @@ class VoiceManager {
     this.isListening = false;
   }
 
-  async speak(text, callback) {
-    if (!text) {
-      if (callback) callback();
-      return;
-    }
+  pause() {
+    this.paused = true;
+    this.stopListening();
+    if (this.silenceTimer) clearTimeout(this.silenceTimer);
+  }
+
+  resume() {
+    this.paused = false;
+    this.startListening();
+  }
+
+  async speak(text) {
+    if (!text) return;
+
+    this.pause();
 
     if (this.playing) {
-      this.queue.push({ text, callback });
+      this.queue.push(text);
       return;
     }
 
@@ -77,23 +124,18 @@ class VoiceManager {
 
     try {
       await this._play(text);
-    } catch (e) {
-      console.error("speak error:", e);
-    }
+    } catch (e) {}
 
     while (this.queue.length > 0) {
       const next = this.queue.shift();
       try {
-        await this._play(next.text);
-      } catch (e) {
-        console.error("queue play error:", e);
-      }
-      if (next.callback) next.callback();
+        await this._play(next);
+      } catch (e) {}
     }
 
     this.playing = false;
     this.setStatus("idle");
-    if (callback) callback();
+    this.resume();
   }
 
   async _play(text) {
@@ -122,7 +164,6 @@ class VoiceManager {
       this.setStatus("idle");
     } catch (e) {
       this.setStatus("error");
-      console.error("test play error:", e);
       return e;
     }
   }

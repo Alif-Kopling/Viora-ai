@@ -14,6 +14,7 @@ const chatToggleCount = document.getElementById('chatToggleCount');
 let conversationHistory = [];
 let isProcessing = false;
 let msgCount = 0;
+let autoMicActive = false;
 
 function showMood(mood) {
   if (mood === 'happy') {
@@ -99,6 +100,28 @@ eventSource.addEventListener('idle_message', (e) => {
   vioraTag.textContent = 'kangen kamu...';
 });
 
+voice.onResult = (text, isInterim) => {
+  if (isInterim) {
+    vioraTag.textContent = 'lagi dengerin...';
+    return;
+  }
+  if (text.length < 3) return;
+  vioraTag.textContent = 'denger...';
+  sendMessage(text);
+};
+
+voice.onSilence = (text) => {
+  if (text.length < 3) return;
+  sendMessage(text);
+};
+
+voice.onEnd = () => {
+  micBtn.classList.remove('listening');
+  if (autoMicActive) {
+    setTimeout(() => voice.startListening(), 500);
+  }
+};
+
 async function sendMessage(message) {
   if (isProcessing || !message.trim()) return;
 
@@ -159,31 +182,29 @@ messageInput.addEventListener('keydown', (e) => {
   }
 });
 
-voice.onResult = (transcript) => {
-  chat.addSystemMessage(`Mendengar: "${transcript}"`);
-  sendMessage(transcript);
-};
-
-voice.onEnd = () => {
-  micBtn.classList.remove('listening');
-};
-
 micBtn.addEventListener('click', () => {
-  if (voice.isListening) {
-    voice.stopListening();
+  autoMicActive = !autoMicActive;
+
+  if (autoMicActive) {
+    micBtn.classList.add('listening');
+    voice.startListening();
+    chat.addSystemMessage('Mic aktif — tinggal ngomong aja, Viora dengerin.');
+  } else {
     micBtn.classList.remove('listening');
-    return;
+    voice.stopListening();
+    chat.addSystemMessage('Mic dimatiin.');
   }
-
-  if (!voice.isSupported()) {
-    chat.addErrorMessage('Voice input tidak didukung di browser ini.');
-    return;
-  }
-
-  micBtn.classList.add('listening');
-  voice.startListening();
-  chat.addSystemMessage('Mikrofon aktif, silakan bicara...');
 });
 
 showMood('happy');
-messageInput.focus();
+
+if (voice.isSupported()) {
+  autoMicActive = true;
+  micBtn.classList.add('listening');
+  setTimeout(() => {
+    voice.startListening();
+    chat.addSystemMessage('Mic otomatis aktif — tinggal ngomong aja sayang.');
+  }, 2000);
+} else {
+  messageInput.focus();
+}
