@@ -126,4 +126,8 @@ MIT — bebas lu pake, modif, distribusi.
   <b>Dibikin pake 🧠 + ☕ + 🎀</b>
   <br>
   <i>"oneesan lo yang tinggal di laptop"</i>
+  </br>
+  <i>ya sebagai seorang anak pertama saya juga ingin merasakan bagaimana di sayang oleh seorang kakak, maka dengan ini saya membuat ai ini</i>i
+  </br>
+  <i>-developer</i>
 </p>
